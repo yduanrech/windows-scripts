@@ -55,7 +55,10 @@
     $isAdmin  = [bool]([Security.Principal.WindowsIdentity]::GetCurrent().Groups -match 'S-1-5-32-544')
     $FilePath = if ($isAdmin) { "$env:SystemRoot\Temp\WPI_$rand.bat" } else { "$env:USERPROFILE\AppData\Local\Temp\WPI_$rand.bat" }
 
-    Set-Content -Path $FilePath -Value $response -Encoding UTF8
+    # Grava UTF-8 SEM BOM — o BOM corrompe a primeira linha do polyglot para o CMD
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($FilePath, $response, $utf8NoBom)
+
     if (-not (Test-Path $FilePath)) {
         Write-Host "Falha ao criar arquivo temporario, abortando!" -ForegroundColor Red
         Write-Host "Ajuda - $troubleshoot" -ForegroundColor White -BackgroundColor Blue
@@ -65,7 +68,7 @@
     $env:ComSpec = "$env:SystemRoot\system32\cmd.exe"
 
     Write-Host "  Iniciando como Administrador..." -ForegroundColor Green
-    Start-Process -FilePath $env:ComSpec -ArgumentList "/c `"`"$FilePath`"`"" -Wait -Verb RunAs
+    Start-Process -FilePath $env:ComSpec -ArgumentList "/c """"$FilePath""""" -Wait -Verb RunAs
 
     if (Test-Path $FilePath) { Remove-Item -Path $FilePath -Force }
 } @args
