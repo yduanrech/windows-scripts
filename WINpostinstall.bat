@@ -304,6 +304,14 @@ $tweakList = @(
         }
     }
     @{
+        Name     = "Desabilitar sugestoes online no File Explorer"
+        Desc     = "Remove sugestoes Bing que aparecem ao digitar na barra de busca do Explorer"
+        MinBuild = 0            # Windows 10 e Windows 11
+        Action   = {
+            Set-RegistryValue "HKCU:\Software\Policies\Microsoft\Windows\Explorer" "DisableSearchBoxSuggestions" 1
+        }
+    }
+    @{
         Name     = "Mostrar porcentagem de bateria na barra de tarefas"
         Desc     = "Exibe o % da bateria ao lado do icone - requer Win11 24H2 (build 26100+)"
         MinBuild = 26100        # Windows 11 24H2 ou superior
@@ -877,7 +885,7 @@ function Show-Menu {
     Write-Host "  [2]  Instalar programas - Devs         (Normal + 9 extras)"
     Write-Host ""
     Write-Host "  -- Sistema --------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [3]  Aplicar tweaks do sistema         (11 ajustes)"
+    Write-Host "  [3]  Aplicar tweaks do sistema         (12 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
     Write-Host ""
     Write-Host "  -- Manutencao -----------------------------------------------" -ForegroundColor DarkCyan
