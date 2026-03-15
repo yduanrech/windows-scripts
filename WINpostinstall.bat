@@ -808,6 +808,43 @@ function Invoke-DriverRestore {
 
 #endregion
 
+#region ── Rede ──────────────────────────────────────────────────────────
+
+function Invoke-WifiDiagnostic {
+    Write-Host "`n  === Diagnostico Wi-Fi ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host "  - Exibe o status atual de todas as interfaces Wi-Fi do sistema" -ForegroundColor DarkGray
+    Write-Host "  - Opcionalmente gera um relatorio HTML completo de conectividade" -ForegroundColor DarkGray
+    Write-Host ""
+
+    Write-Step "Interfaces Wi-Fi detectadas:"
+    Write-Host ""
+    & netsh wlan show interfaces
+    Write-Host ""
+
+    $genReport = Read-Host "  Gerar relatorio HTML de diagnostico Wi-Fi? (S/n)"
+    if ($genReport -eq '' -or $genReport -match '^[sS]') {
+        Write-Host ""
+        Write-Step "Gerando relatorio WLAN..."
+        & netsh wlan show wlanreport | Out-Null
+        $reportPath = "$env:ProgramData\Microsoft\Windows\WlanReport\wlan-report-latest.html"
+        if (Test-Path $reportPath) {
+            Write-Ok "Relatorio gerado em:"
+            Write-Host "  $reportPath" -ForegroundColor DarkGray
+            Write-Host ""
+            $open = Read-Host "  Abrir relatorio no navegador? (S/n)"
+            if ($open -eq '' -or $open -match '^[sS]') {
+                Start-Process $reportPath
+            }
+        } else {
+            Write-Fail "Relatorio nao encontrado. Verifique se o Wi-Fi esta ativo."
+        }
+    }
+}
+
+#endregion
+
 function Show-Menu {
     Clear-Host
     $build = [System.Environment]::OSVersion.Version.Build
@@ -821,7 +858,7 @@ function Show-Menu {
     Write-Host "  [2]  Instalar programas - Devs         (Normal + 9 extras)"
     Write-Host ""
     Write-Host "  -- Sistema --------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [3]  Aplicar tweaks do sistema         (9 ajustes)"
+    Write-Host "  [3]  Aplicar tweaks do sistema         (10 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
     Write-Host ""
     Write-Host "  -- Manutencao -----------------------------------------------" -ForegroundColor DarkCyan
@@ -831,6 +868,9 @@ function Show-Menu {
     Write-Host "  -- Drivers --------------------------------------------------" -ForegroundColor DarkCyan
     Write-Host "  [7]  Backup de drivers"
     Write-Host "  [8]  Restore de drivers"
+    Write-Host ""
+    Write-Host "  -- Rede -----------------------------------------------------" -ForegroundColor DarkCyan
+    Write-Host "  [9]  Diagnostico Wi-Fi"
     Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
@@ -853,7 +893,8 @@ do {
         "5" { Invoke-SystemMaintenance;    Press-Key }
         "6" { Invoke-TempCleanup;          Press-Key }
         "7" { Invoke-DriverBackup;         Press-Key }
-        "8" { Invoke-DriverRestore;        Press-Key }
+        "8" { Invoke-DriverRestore;         Press-Key }
+        "9" { Invoke-WifiDiagnostic;        Press-Key }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
