@@ -350,6 +350,349 @@ function Invoke-AllTweaks {
 
 #endregion
 
+#region ── Manutencao do Sistema ───────────────────────────────────────────────
+
+function Invoke-SystemMaintenance {
+    Write-Host "`n  === Manutencao do Sistema ===`n" -ForegroundColor Cyan
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "   1. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Limpeza de drivers antigos/orfaos" -NoNewline -ForegroundColor White
+    Write-Host " - Remove drivers que nao estao mais em uso" -ForegroundColor DarkGray
+    Write-Host "   2. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "DISM CheckHealth" -NoNewline -ForegroundColor White
+    Write-Host " - Verifica se a imagem do sistema tem corrupcao" -ForegroundColor DarkGray
+    Write-Host "   3. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "SFC /scannow" -NoNewline -ForegroundColor White
+    Write-Host " - Verifica e repara arquivos protegidos do Windows" -ForegroundColor DarkGray
+    Write-Host "   4. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "DISM RestoreHealth" -NoNewline -ForegroundColor White
+    Write-Host " - Repara a imagem do sistema usando Windows Update" -ForegroundColor DarkGray
+    Write-Host "   5. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "DISM StartComponentCleanup" -NoNewline -ForegroundColor White
+    Write-Host " - Remove versoes antigas de componentes do Windows" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  [!] Este processo pode levar de 15 a 60 minutos." -ForegroundColor DarkYellow
+    Write-Host ""
+
+    if (-not (Confirm-Action "Executar manutencao do sistema?")) {
+        Write-Info "Manutencao cancelada pelo usuario."
+        return
+    }
+    Write-Host ""
+
+    Write-Step "[1/5] Limpeza de drivers antigos..."
+    Start-Process -FilePath "rundll32.exe" -ArgumentList "pnpclean.dll,RunDLL_PnpClean /drivers/maxclean" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+    Write-Ok "Limpeza de drivers concluida."
+
+    Write-Step "[2/5] DISM - Verificando saude da imagem (CheckHealth)..."
+    & dism /Online /Cleanup-Image /CheckHealth
+    Write-Host ""
+
+    Write-Step "[3/5] SFC - Verificando arquivos do sistema..."
+    & sfc /scannow
+    Write-Host ""
+
+    Write-Step "[4/5] DISM - Reparando imagem do sistema (RestoreHealth)..."
+    & dism /Online /Cleanup-Image /RestoreHealth
+    Write-Host ""
+
+    Write-Step "[5/5] DISM - Limpeza de componentes antigos..."
+    & dism /Online /Cleanup-Image /StartComponentCleanup /ResetBase
+    Write-Host ""
+
+    Write-Ok "Manutencao do sistema concluida."
+}
+
+#endregion
+
+#region ── Limpeza de Arquivos Temporarios ─────────────────────────────────────
+
+function Remove-Silently {
+    param([string[]]$Paths)
+    foreach ($p in $Paths) {
+        Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Remove-BrowserCache {
+    param(
+        [string]$BrowserName,
+        [string]$ProcessName,
+        [string]$BasePath    # caminho relativo dentro de AppData\Local
+    )
+    $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
+    if ($proc) {
+        Write-Step "Fechando $BrowserName..."
+        Stop-Process -Name $ProcessName -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 1
+    }
+
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        $base = Join-Path $user.FullName "AppData\Local\$BasePath"
+        if (-not (Test-Path $base)) { continue }
+
+        $profiles = @("Default", "Guest Profile")
+        # Detecta Profile 1 a Profile 12
+        1..12 | ForEach-Object { $profiles += "Profile $_" }
+
+        foreach ($profile in $profiles) {
+            $profPath = Join-Path $base $profile
+            if (-not (Test-Path $profPath)) { continue }
+            Remove-Silently @(
+                "$profPath\Cache\Cache_Data\*"
+                "$profPath\GPUCache\*"
+                "$profPath\Code Cache\js\*"
+                "$profPath\Code Cache\wasm\*"
+                "$profPath\Code Cache\webui_js\*"
+                "$profPath\Service Worker\CacheStorage\*"
+                "$profPath\Service Worker\Database\*"
+                "$profPath\Service Worker\ScriptCache\*"
+                "$profPath\Storage\data_*"
+                "$profPath\Storage\index*"
+                "$profPath\JumpListIconsRecentClosed\*.tmp"
+                "$profPath\History-journal*"
+                "$profPath\Platform Notifications\*"
+                "$profPath\File System\*"
+                "$profPath\IndexedDB\https_ntp.msn.com_0.indexeddb.leveldb\*"
+                "$profPath\EdgePushStorageWithWinRt\*.log"
+                "$profPath\EdgeCoupons\coupons_data.db\*"
+            )
+        }
+        # Arquivos na raiz do User Data
+        Remove-Silently @(
+            "$base\*.pma"
+            "$base\BrowserMetrics\*.pma"
+            "$base\crash*.pma"
+        )
+    }
+}
+
+function Invoke-TempCleanup {
+    Write-Host "`n  === Limpeza de Arquivos Temporarios ===`n" -ForegroundColor Cyan
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "   1. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Lixeira" -NoNewline -ForegroundColor White
+    Write-Host " - Esvazia a lixeira de todos os usuarios" -ForegroundColor DarkGray
+    Write-Host "   2. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Pastas Temp" -NoNewline -ForegroundColor White
+    Write-Host " - Temp dos usuarios e C:\Windows\Temp" -ForegroundColor DarkGray
+    Write-Host "   3. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Logs do Windows" -NoNewline -ForegroundColor White
+    Write-Host " - CBS, Setup, Panther, WinSAT, .NET, etc." -ForegroundColor DarkGray
+    Write-Host "   4. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Logs do OneDrive" -NoNewline -ForegroundColor White
+    Write-Host " - Logs, .odl, .aodl, .otc, .qmlc" -ForegroundColor DarkGray
+    Write-Host "   5. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Crash dumps" -NoNewline -ForegroundColor White
+    Write-Host " - Arquivos .dmp de programas" -ForegroundColor DarkGray
+    Write-Host "   6. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Cache do IE/Edge Legacy" -NoNewline -ForegroundColor White
+    Write-Host " - WebCache, INetCache, thumbnails" -ForegroundColor DarkGray
+    Write-Host "   7. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Cache do Edge" -NoNewline -ForegroundColor White
+    Write-Host " - Cache, GPUCache, Service Workers, Code Cache" -ForegroundColor DarkGray
+    Write-Host "   8. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Cache do Firefox" -NoNewline -ForegroundColor White
+    Write-Host " - Cache e scripts compilados" -ForegroundColor DarkGray
+    Write-Host "   9. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Cache do Chrome" -NoNewline -ForegroundColor White
+    Write-Host " - Cache, GPUCache, Service Workers, Code Cache" -ForegroundColor DarkGray
+    Write-Host "  10. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Cache do Brave" -NoNewline -ForegroundColor White
+    Write-Host " - Cache, GPUCache, Service Workers, Code Cache" -ForegroundColor DarkGray
+    Write-Host "  11. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Cache do Vivaldi" -NoNewline -ForegroundColor White
+    Write-Host " - Cache, GPUCache, Service Workers, Code Cache" -ForegroundColor DarkGray
+    Write-Host "  12. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Spotify" -NoNewline -ForegroundColor White
+    Write-Host " - Cache de dados e browser" -ForegroundColor DarkGray
+    Write-Host "  13. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "Adobe Media Cache" -NoNewline -ForegroundColor White
+    Write-Host " - Cache de midia e logs" -ForegroundColor DarkGray
+    Write-Host "  14. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "VMware" -NoNewline -ForegroundColor White
+    Write-Host " - Logs" -ForegroundColor DarkGray
+    Write-Host "  15. " -NoNewline -ForegroundColor DarkGray
+    Write-Host "TeamViewer" -NoNewline -ForegroundColor White
+    Write-Host " - Cache do browser integrado" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  [!] Navegadores abertos serao fechados automaticamente." -ForegroundColor DarkYellow
+    Write-Host "  [!] Apaga somente cache/temp. Senhas e favoritos NAO sao afetados." -ForegroundColor DarkYellow
+    Write-Host ""
+
+    if (-not (Confirm-Action "Executar limpeza de temporarios?")) {
+        Write-Info "Limpeza cancelada pelo usuario."
+        return
+    }
+    Write-Host ""
+
+    # --- 1. Lixeira ---
+    Write-Step "[01/15] Esvaziando lixeira..."
+    Clear-RecycleBin -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Ok "Lixeira esvaziada."
+
+    # --- 2. Pastas Temp ---
+    Write-Step "[02/15] Limpando pastas Temp dos usuarios..."
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        $tempDir = Join-Path $user.FullName "AppData\Local\Temp"
+        if (Test-Path $tempDir) {
+            Remove-Item "$tempDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Step "[02/15] Limpando C:\Windows\Temp..."
+    Remove-Item "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Ok "Pastas Temp limpas."
+
+    # --- 3. Logs do Windows ---
+    Write-Step "[03/15] Removendo logs do Windows..."
+    $winLogs = @(
+        "C:\Windows\Logs\cbs\*.log"
+        "C:\Windows\setupact.log"
+        "C:\Windows\Logs\MeasuredBoot\*.log"
+        "C:\Windows\Logs\MoSetup\*.log"
+        "C:\Windows\Panther\*.log"
+        "C:\Windows\Performance\WinSAT\winsat.log"
+        "C:\Windows\inf\*.log"
+        "C:\Windows\logs\*.log"
+        "C:\Windows\SoftwareDistribution\*.log"
+        "C:\Windows\Microsoft.NET\*.log"
+    )
+    Remove-Silently $winLogs
+    # Logs do MpCmdRun em ServiceProfiles
+    Remove-Silently @(
+        "C:\Windows\ServiceProfiles\LocalService\AppData\Local\Temp\MpCmdRun.log"
+        "C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Temp\MpCmdRun.log"
+    )
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        Remove-Silently @("$($user.FullName)\AppData\Local\Microsoft\*.log")
+    }
+    Write-Ok "Logs do Windows removidos."
+
+    # --- 4. Logs do OneDrive ---
+    Write-Step "[04/15] Removendo logs do OneDrive..."
+    $odProcs = Get-Process -Name "OneDrive" -ErrorAction SilentlyContinue
+    if ($odProcs) { Stop-Process -Name "OneDrive" -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        $odBase = "$($user.FullName)\AppData\Local\Microsoft\OneDrive"
+        Remove-Silently @(
+            "$odBase\setup\logs\*.log"
+            "$odBase\*.odl"
+            "$odBase\*.aodl"
+            "$odBase\*.otc"
+        )
+        Remove-Silently @("$($user.FullName)\AppData\Local\OneDrive\*.qmlc")
+    }
+    Write-Ok "Logs do OneDrive removidos."
+
+    # --- 5. Crash dumps ---
+    Write-Step "[05/15] Removendo crash dumps de programas..."
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        Remove-Silently @("$($user.FullName)\AppData\Local\CrashDumps\*.dmp")
+    }
+    Write-Ok "Crash dumps removidos."
+
+    # --- 6. Cache IE/Edge Legacy ---
+    Write-Step "[06/15] Limpando cache do IE/Edge Legacy..."
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        $base = $user.FullName
+        Remove-Silently @(
+            "$base\AppData\Local\Microsoft\Windows\Explorer\*.db"
+            "$base\AppData\Local\Microsoft\Windows\WebCache\*.log"
+            "$base\AppData\Local\Microsoft\Windows\SettingSync\*.log"
+            "$base\AppData\Local\Microsoft\Windows\Explorer\ThumbCacheToDelete\*.tmp"
+            "$base\AppData\Local\Microsoft\Terminal Server Client\Cache\*.bin"
+            "$base\AppData\Local\Microsoft\Windows\INetCache\IE\*"
+            "$base\AppData\Local\Microsoft\Windows\INetCache\Low\*"
+            "$base\AppData\LocalLow\Microsoft\CryptnetUrlCache\Content\*"
+            "$base\AppData\LocalLow\Microsoft\CryptnetUrlCache\MetaData\*"
+        )
+    }
+    Write-Ok "Cache IE/Edge Legacy limpo."
+
+    # --- 7-11. Navegadores modernos ---
+    Write-Step "[07/15] Limpando cache do Edge..."
+    Remove-BrowserCache "Edge" "msedge" "Microsoft\Edge\User Data"
+    Write-Ok "Cache do Edge limpo."
+
+    Write-Step "[08/15] Limpando cache do Firefox..."
+    $fxProc = Get-Process -Name "firefox" -ErrorAction SilentlyContinue
+    if ($fxProc) { Stop-Process -Name "firefox" -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1 }
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        $fxPath = "$($user.FullName)\AppData\Local\Mozilla\Firefox\Profiles"
+        if (Test-Path $fxPath) {
+            Get-ChildItem $fxPath -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                Remove-Silently @(
+                    "$($_.FullName)\cache2\entries\*"
+                    "$($_.FullName)\cache2\doomed\*"
+                    "$($_.FullName)\startupCache\*"
+                    "$($_.FullName)\jumpListCache\*"
+                )
+            }
+        }
+    }
+    Write-Ok "Cache do Firefox limpo."
+
+    Write-Step "[09/15] Limpando cache do Chrome..."
+    Remove-BrowserCache "Chrome" "chrome" "Google\Chrome\User Data"
+    Remove-Silently @("C:\Program Files\Google\Chrome\Application\SetupMetrics\*.pma")
+    Write-Ok "Cache do Chrome limpo."
+
+    Write-Step "[10/15] Limpando cache do Brave..."
+    Remove-BrowserCache "Brave" "brave" "BraveSoftware\Brave-Browser\User Data"
+    Remove-Silently @("C:\Program Files\BraveSoftware\Brave-Browser\Application\SetupMetrics\*.pma")
+    Write-Ok "Cache do Brave limpo."
+
+    Write-Step "[11/15] Limpando cache do Vivaldi..."
+    Remove-BrowserCache "Vivaldi" "vivaldi" "Vivaldi\User Data"
+    Write-Ok "Cache do Vivaldi limpo."
+
+    # --- 12. Spotify ---
+    Write-Step "[12/15] Limpando cache do Spotify..."
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        Remove-Silently @(
+            "$($user.FullName)\AppData\Local\Spotify\Data\*.file"
+            "$($user.FullName)\AppData\Local\Spotify\Browser\Cache\Cache_Data\f*"
+            "$($user.FullName)\AppData\Local\Spotify\Browser\GPUCache\*"
+        )
+    }
+    Write-Ok "Cache do Spotify limpo."
+
+    # --- 13. Adobe Media Cache ---
+    Write-Step "[13/15] Limpando Adobe Media Cache..."
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        Remove-Silently @(
+            "$($user.FullName)\AppData\Roaming\Adobe\Common\Media Cache Files\*"
+            "$($user.FullName)\AppData\Roaming\Adobe\*.log"
+        )
+    }
+    Write-Ok "Adobe Media Cache limpo."
+
+    # --- 14. VMware ---
+    Write-Step "[14/15] Limpando logs do VMware..."
+    Remove-Silently @("C:\ProgramData\VMware\logs\*.log")
+    Write-Ok "Logs do VMware limpos."
+
+    # --- 15. TeamViewer ---
+    Write-Step "[15/15] Limpando cache do TeamViewer..."
+    foreach ($user in Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue) {
+        $tvPath = "$($user.FullName)\AppData\Local\TeamViewer\EdgeBrowserControl"
+        if (Test-Path $tvPath) {
+            Remove-Item "$tvPath\Persistent\data_*" -Force -ErrorAction SilentlyContinue
+            Get-ChildItem $tvPath -Recurse -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^(f_.*|data\.|index\.|.*_[0-5])$' } |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Ok "Cache do TeamViewer limpo."
+
+    Write-Host ""
+    Write-Ok "Limpeza de arquivos temporarios concluida!"
+}
+
+#endregion
+
 #region ── Menu Principal ─────────────────────────────────────────────────────
 
 function Show-Menu {
@@ -367,6 +710,10 @@ function Show-Menu {
     Write-Host "  -- Sistema --------------------------------------------------" -ForegroundColor DarkCyan
     Write-Host "  [3]  Aplicar tweaks do sistema         (9 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
+    Write-Host ""
+    Write-Host "  -- Manutencao -----------------------------------------------" -ForegroundColor DarkCyan
+    Write-Host "  [5]  Manutencao do sistema (DISM/SFC)"
+    Write-Host "  [6]  Limpeza de arquivos temporarios"
     Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
@@ -386,6 +733,8 @@ do {
         "2" { Install-DevApps;             Press-Key }
         "3" { Invoke-AllTweaks;            Press-Key }
         "4" { Register-WingetUpdateTask;   Press-Key }
+        "5" { Invoke-SystemMaintenance;    Press-Key }
+        "6" { Invoke-TempCleanup;          Press-Key }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
