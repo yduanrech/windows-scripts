@@ -69,6 +69,11 @@ function Set-RegistryValue {
     Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type
 }
 
+function Confirm-Action ([string]$Prompt) {
+    $r = Read-Host "  $Prompt (S/n)"
+    return ($r -eq '' -or $r -match '^[sS]')
+}
+
 #endregion
 
 #region ── Verificacoes Iniciais ───────────────────────────────────────────────
@@ -86,44 +91,67 @@ if (-not (Test-Winget)) {
 
 #endregion
 
-#region ── Listas de Aplicativos ───────────────────────────────────────────────
+#region ── Listas de Aplicativos (Id + Descricao) ─────────────────────────────
 
 $appsNormal = @(
-    "Google.Chrome"
-    "7zip.7zip"
-    "Bitwarden.Bitwarden"
-    "ente-io.auth-desktop"
-    "Microsoft.PowerToys"
-    "Adobe.Acrobat.Reader.64-bit"
-    "clsid2.mpc-hc"
-    "AntibodySoftware.WizTree"
+    @{ Id = "Google.Chrome";                Desc = "Navegador web" }
+    @{ Id = "7zip.7zip";                    Desc = "Compactador/descompactador de arquivos" }
+    @{ Id = "Bitwarden.Bitwarden";          Desc = "Gerenciador de senhas" }
+    @{ Id = "ente-io.auth-desktop";         Desc = "Autenticador 2FA (Ente Auth)" }
+    @{ Id = "Microsoft.PowerToys";          Desc = "Utilitarios avancados da Microsoft" }
+    @{ Id = "Adobe.Acrobat.Reader.64-bit";  Desc = "Leitor de PDF" }
+    @{ Id = "clsid2.mpc-hc";               Desc = "Player de video leve" }
+    @{ Id = "AntibodySoftware.WizTree";     Desc = "Analisador de espaco em disco" }
 )
 
 $appsDev = @(
-    "Microsoft.VisualStudioCode"
-    "Notepad++.Notepad++"
-    "CoreyButler.NVMforWindows"
-    "HeidiSQL.HeidiSQL"
-    "Microsoft.Git"
-    "GitHub.GitHubDesktop"
-    "PuTTY.PuTTY"
-    "WinSCP.WinSCP"
-    "OpenVPNTechnologies.OpenVPN"
+    @{ Id = "Microsoft.VisualStudioCode";   Desc = "Editor de codigo (VS Code)" }
+    @{ Id = "Notepad++.Notepad++";          Desc = "Editor de texto avancado" }
+    @{ Id = "CoreyButler.NVMforWindows";    Desc = "Gerenciador de versoes do Node.js" }
+    @{ Id = "HeidiSQL.HeidiSQL";            Desc = "Cliente de banco de dados (MySQL/MariaDB)" }
+    @{ Id = "Microsoft.Git";                Desc = "Controle de versao Git" }
+    @{ Id = "GitHub.GitHubDesktop";         Desc = "Cliente Git com interface grafica" }
+    @{ Id = "PuTTY.PuTTY";                 Desc = "Cliente SSH/Telnet" }
+    @{ Id = "WinSCP.WinSCP";               Desc = "Cliente SFTP/FTP/SCP" }
+    @{ Id = "OpenVPNTechnologies.OpenVPN";  Desc = "Cliente VPN" }
 )
 
 #endregion
 
-#region ── Funcoes de Instalacao ───────────────────────────────────────────────
+#region ── Funcoes de Exibicao e Instalacao ────────────────────────────────────
+
+function Show-AppList {
+    param([string]$Label, [array]$AppList)
+    Write-Host ""
+    Write-Host "  === Programas - $Label ===" -ForegroundColor Cyan
+    Write-Host ""
+    $i = 1
+    foreach ($app in $AppList) {
+        $name = ($app.Id -split '\.')[-1]
+        Write-Host ("  {0,2}. " -f $i) -NoNewline -ForegroundColor DarkGray
+        Write-Host "$($app.Desc)" -NoNewline
+        Write-Host "  ($($app.Id))" -ForegroundColor DarkGray
+        $i++
+    }
+    Write-Host ""
+    Write-Host "  Total: $($AppList.Count) programas" -ForegroundColor DarkGray
+    Write-Host ""
+}
 
 function Install-Apps {
-    param([string]$Label, [string[]]$AppList)
-    Write-Host "`n  === Instalando programas ($Label) ===`n" -ForegroundColor Cyan
+    param([string]$Label, [array]$AppList)
+    Show-AppList $Label $AppList
+    if (-not (Confirm-Action "Instalar esses $($AppList.Count) programas?")) {
+        Write-Info "Instalacao cancelada pelo usuario."
+        return
+    }
+    Write-Host ""
     $total   = $AppList.Count
     $current = 0
     foreach ($app in $AppList) {
         $current++
-        Write-Step "[$current/$total] $app"
-        winget install -e --id $app --accept-source-agreements --accept-package-agreements
+        Write-Step "[$current/$total] $($app.Desc) ($($app.Id))"
+        winget install -e --id $app.Id --accept-source-agreements --accept-package-agreements
         Write-Host ""
     }
     Write-Ok "Programas ($Label) - instalacao concluida."
@@ -141,7 +169,17 @@ function Install-DevApps {
 #region ── Tarefa Agendada (winget upgrade) ────────────────────────────────────
 
 function Register-WingetUpdateTask {
-    Write-Host "`n  === Criando tarefa agendada (winget upgrade semanal) ===`n" -ForegroundColor Cyan
+    Write-Host "`n  === Tarefa Agendada - Atualizacao Semanal ===`n" -ForegroundColor Cyan
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host "  - Cria uma tarefa no Agendador de Tarefas do Windows"
+    Write-Host "  - Toda segunda-feira as 10:00"
+    Write-Host "  - Executa: winget upgrade --all (atualiza todos os programas)"
+    Write-Host ""
+
+    if (-not (Confirm-Action "Criar esta tarefa agendada?")) {
+        Write-Info "Tarefa cancelada pelo usuario."
+        return
+    }
 
     $taskName   = "WinGet - Atualizar Aplicativos"
     $wingetPath = (Get-Command winget).Source
@@ -162,7 +200,6 @@ function Register-WingetUpdateTask {
         -DontStopIfGoingOnBatteries `
         -StartWhenAvailable
 
-    # Remove tarefa existente, se houver
     Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
     Register-ScheduledTask `
@@ -180,87 +217,110 @@ function Register-WingetUpdateTask {
 
 #region ── Tweaks do Sistema ───────────────────────────────────────────────────
 
-# 1. Menu de contexto classico (estilo Windows 10)
-function Invoke-Tweak-ClassicContextMenu {
-    Write-Step "Restaurando menu de contexto classico (estilo Windows 10)..."
-    reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve | Out-Null
-}
+# Definicao de todos os tweaks com nome, descricao e funcao
+$tweakList = @(
+    @{
+        Name = "Menu de contexto classico"
+        Desc = "Restaura o menu do botao direito estilo Windows 10 (sem o 'Mostrar mais opcoes')"
+        Action = {
+            reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve | Out-Null
+        }
+    }
+    @{
+        Name = "Mostrar extensoes de arquivo"
+        Desc = "Exibe .txt, .exe, .jpg etc. no nome dos arquivos no Explorer"
+        Action = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
+        }
+    }
+    @{
+        Name = "Mostrar arquivos ocultos"
+        Desc = "Torna visiveis arquivos e pastas ocultos no Explorer"
+        Action = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
+        }
+    }
+    @{
+        Name = "Ocultar barra de idiomas"
+        Desc = "Remove o indicador de idioma (POR/ENG) da barra de tarefas"
+        Action = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\CTF\LangBar" "ShowStatus" 3
+        }
+    }
+    @{
+        Name = "Notificacoes de apps na inicializacao"
+        Desc = "Alerta quando um programa se adiciona a inicializacao do Windows"
+        Action = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.StartupApp" "Enabled" 1
+        }
+    }
+    @{
+        Name = "Windows Terminal como padrao"
+        Desc = "Define o Windows Terminal como terminal padrao do sistema"
+        Action = {
+            $path = "HKCU:\Console\%%Startup"
+            Set-RegistryValue $path "DelegationConsole"  "{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}" "String"
+            Set-RegistryValue $path "DelegationTerminal" "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}" "String"
+        }
+    }
+    @{
+        Name = "Plano de energia: Alto Desempenho"
+        Desc = "Ativa o plano Alto Desempenho (mais performance, mais consumo de energia)"
+        Action = {
+            powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null | Out-Null
+            powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        }
+    }
+    @{
+        Name = "Historico da area de transferencia"
+        Desc = "Ativa o historico de copiar/colar (acesse com Win+V)"
+        Action = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\Clipboard" "EnableClipboardHistory" 1
+        }
+    }
+    @{
+        Name = "Desabilitar hibernacao e inicializacao rapida"
+        Desc = "Remove o arquivo de hibernacao (hiberfil.sys) e desliga o Fast Startup"
+        Action = {
+            powercfg /h off 2>$null
+            Set-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 0
+        }
+    }
+)
 
-# 2. Mostrar extensoes de arquivo no Explorer
-function Invoke-Tweak-FileExtensions {
-    Write-Step "Mostrando extensoes de arquivo no Explorer..."
-    Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
-}
+function Invoke-AllTweaks {
+    Write-Host "`n  === Tweaks do Sistema ===`n" -ForegroundColor Cyan
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host ""
+    $i = 1
+    foreach ($t in $tweakList) {
+        Write-Host ("  {0,2}. " -f $i) -NoNewline -ForegroundColor DarkGray
+        Write-Host "$($t.Name)" -NoNewline -ForegroundColor White
+        Write-Host " - $($t.Desc)" -ForegroundColor DarkGray
+        $i++
+    }
+    Write-Host ""
+    Write-Host "  + Reinicia o Explorer para aplicar as alteracoes visuais" -ForegroundColor DarkGray
+    Write-Host ""
 
-# 3. Mostrar arquivos ocultos no Explorer
-function Invoke-Tweak-HiddenFiles {
-    Write-Step "Mostrando arquivos ocultos no Explorer..."
-    Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
-}
+    if (-not (Confirm-Action "Aplicar todos os $($tweakList.Count) tweaks?")) {
+        Write-Info "Tweaks cancelados pelo usuario."
+        return
+    }
+    Write-Host ""
 
-# 4. Ocultar barra de idiomas na taskbar
-function Invoke-Tweak-HideLanguageBar {
-    Write-Step "Ocultando barra de idiomas na taskbar..."
-    Set-RegistryValue "HKCU:\Software\Microsoft\CTF\LangBar" "ShowStatus" 3
-}
+    $current = 0
+    foreach ($t in $tweakList) {
+        $current++
+        Write-Step "[$current/$($tweakList.Count)] $($t.Name)"
+        & $t.Action
+    }
 
-# 5. Ativar notificacoes de novos programas na inicializacao
-function Invoke-Tweak-StartupNotifications {
-    Write-Step "Ativando notificacoes de novos programas na inicializacao..."
-    Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.StartupApp" "Enabled" 1
-}
-
-# 6. Usar Windows Terminal como terminal padrao
-function Invoke-Tweak-DefaultTerminal {
-    Write-Step "Definindo Windows Terminal como terminal padrao..."
-    $path = "HKCU:\Console\%%Startup"
-    Set-RegistryValue $path "DelegationConsole"  "{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}" "String"
-    Set-RegistryValue $path "DelegationTerminal" "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}" "String"
-}
-
-# 7. Plano de energia: Alto Desempenho
-function Invoke-Tweak-HighPerformance {
-    Write-Step "Ativando plano de energia Alto Desempenho..."
-    # Duplica o esquema caso nao esteja disponivel, depois ativa
-    powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null | Out-Null
-    powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-}
-
-# 8. Ativar historico da area de transferencia (Win+V)
-function Invoke-Tweak-ClipboardHistory {
-    Write-Step "Ativando historico da area de transferencia (Win+V)..."
-    Set-RegistryValue "HKCU:\Software\Microsoft\Clipboard" "EnableClipboardHistory" 1
-}
-
-# 9. Desabilitar hibernacao e inicializacao rapida
-function Invoke-Tweak-DisableHibernation {
-    Write-Step "Desabilitando hibernacao e arquivo de hibernacao..."
-    powercfg /h off 2>$null
-    Write-Step "Desabilitando inicializacao rapida (Fast Startup)..."
-    Set-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 0
-}
-
-# Reiniciar Explorer para aplicar alteracoes visuais
-function Invoke-RestartExplorer {
-    Write-Step "Reiniciando Explorer para aplicar alteracoes..."
+    Write-Step "Reiniciando Explorer..."
     Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
     Start-Process explorer.exe
-}
 
-# Aplica todos os tweaks de uma vez
-function Invoke-AllTweaks {
-    Write-Host "`n  === Aplicando todos os tweaks ===`n" -ForegroundColor Cyan
-    Invoke-Tweak-ClassicContextMenu
-    Invoke-Tweak-FileExtensions
-    Invoke-Tweak-HiddenFiles
-    Invoke-Tweak-HideLanguageBar
-    Invoke-Tweak-StartupNotifications
-    Invoke-Tweak-DefaultTerminal
-    Invoke-Tweak-HighPerformance
-    Invoke-Tweak-ClipboardHistory
-    Invoke-Tweak-DisableHibernation
-    Invoke-RestartExplorer
     Write-Host ""
     Write-Ok "Todos os tweaks aplicados com sucesso."
 }
@@ -278,11 +338,11 @@ function Show-Menu {
     Write-Host "  ================================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  -- Programas ------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [1]  Instalar programas - Normal"
-    Write-Host "  [2]  Instalar programas - Devs (inclui Normal)"
+    Write-Host "  [1]  Instalar programas - Normal       (8 programas)"
+    Write-Host "  [2]  Instalar programas - Devs         (Normal + 9 extras)"
     Write-Host ""
     Write-Host "  -- Sistema --------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [3]  Aplicar todos os tweaks do sistema"
+    Write-Host "  [3]  Aplicar tweaks do sistema         (9 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
     Write-Host ""
     Write-Host "  -- Completo -------------------------------------------------" -ForegroundColor DarkCyan

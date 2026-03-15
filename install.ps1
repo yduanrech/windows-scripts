@@ -75,15 +75,17 @@
         }
     }
     else {
-        # Precisa elevar - abre nova janela PowerShell como admin
+        # Precisa elevar - abre nova janela PowerShell como admin com -File
         Write-Host "  Solicitando permissao de Administrador (UAC)..." -ForegroundColor Green
         try {
-            Start-Process powershell -Verb RunAs -ArgumentList (
-                "-NoProfile -ExecutionPolicy Bypass -Command `"& { Set-Location '$env:SystemRoot'; & ([scriptblock]::Create((Get-Content -LiteralPath ''$FilePath'' -Raw))); Remove-Item -LiteralPath ''$FilePath'' -Force -ErrorAction SilentlyContinue; Write-Host ''; pause }`""
+            Start-Process powershell -Verb RunAs -Wait -ArgumentList (
+                "-NoProfile -ExecutionPolicy Bypass -File `"$FilePath`""
             )
         }
         catch {
             Write-Host "  Elevacao cancelada ou falhou." -ForegroundColor Red
+        }
+        finally {
             Remove-Item -Path $FilePath -Force -ErrorAction SilentlyContinue
         }
     }
