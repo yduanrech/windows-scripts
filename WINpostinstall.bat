@@ -295,6 +295,14 @@ $tweakList = @(
             Set-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 0
         }
     }
+    @{
+        Name     = "Desabilitar pesquisa Bing no menu Iniciar"
+        Desc     = "Remove a pesquisa web (Bing) do menu Iniciar - busca fica so local"
+        MinBuild = 22000        # Somente Windows 11
+        Action   = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "BingSearchEnabled" 0
+        }
+    }
 )
 
 function Invoke-AllTweaks {
@@ -693,7 +701,112 @@ function Invoke-TempCleanup {
 
 #endregion
 
-#region ── Menu Principal ─────────────────────────────────────────────────────
+#region ── Backup e Restore de Drivers ────────────────────────────────────────
+
+function Get-ValidDirectory {
+    param([string]$Prompt)
+    do {
+        $path = Read-Host "  $Prompt"
+        $path = $path.Trim('"').Trim()
+        if (-not $path) {
+            Write-Fail "Caminho nao pode ser vazio."
+            continue
+        }
+        if (Test-Path $path) { return $path }
+        $create = Read-Host "  Pasta nao encontrada. Criar '$path'? (S/n)"
+        if ($create -eq '' -or $create -match '^[sS]') {
+            try {
+                New-Item -Path $path -ItemType Directory -Force | Out-Null
+                return $path
+            } catch {
+                Write-Fail "Nao foi possivel criar a pasta: $_"
+            }
+        }
+    } while ($true)
+}
+
+function Invoke-DriverBackup {
+    Write-Host "`n  === Backup de Drivers ==="  -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host "  - Exporta todos os drivers de terceiros instalados para uma pasta" -ForegroundColor DarkGray
+    Write-Host "  - Usa: dism /online /export-driver" -ForegroundColor DarkGray
+    Write-Host "  - Cada driver fica em sua propria subpasta com os arquivos .inf/.sys" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  [!] Somente drivers de terceiros sao exportados (nao os drivers" -ForegroundColor DarkYellow
+    Write-Host "      embutidos do Windows). Ideal para guardar antes de reinstalar." -ForegroundColor DarkYellow
+    Write-Host ""
+
+    $dest = Get-ValidDirectory "Digite o caminho da pasta de destino para o backup"
+
+    Write-Host ""
+    if (-not (Confirm-Action "Fazer backup dos drivers em '$dest'?")) {
+        Write-Info "Backup cancelado pelo usuario."
+        return
+    }
+    Write-Host ""
+
+    Write-Step "Exportando drivers..."
+    $result = & dism /online /export-driver /destination:"$dest" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $count = (Get-ChildItem $dest -Directory -ErrorAction SilentlyContinue).Count
+        Write-Host ""
+        Write-Ok "Backup concluido! $count drivers exportados para '$dest'."
+    } else {
+        Write-Host ""
+        Write-Fail "DISM retornou erro (codigo $LASTEXITCODE)."
+        Write-Host "  $result" -ForegroundColor DarkGray
+    }
+}
+
+function Invoke-DriverRestore {
+    Write-Host "`n  === Restore de Drivers ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host "  - Instala todos os drivers (.inf) encontrados na pasta selecionada" -ForegroundColor DarkGray
+    Write-Host "  - Usa: pnputil /add-driver *.inf /subdirs /install" -ForegroundColor DarkGray
+    Write-Host "  - Procura recursivamente em todas as subpastas" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  [!] Use a pasta gerada pelo Backup de Drivers desta ferramenta," -ForegroundColor DarkYellow
+    Write-Host "      ou qualquer pasta com arquivos .inf de drivers." -ForegroundColor DarkYellow
+    Write-Host ""
+
+    $src = ""
+    do {
+        $src = (Read-Host "  Digite o caminho da pasta com os drivers").Trim('"').Trim()
+        if (-not $src) { Write-Fail "Caminho nao pode ser vazio."; continue }
+        if (Test-Path $src) { break }
+        Write-Fail "Pasta nao encontrada: '$src'"
+    } while ($true)
+
+    # Conta quantos .inf existem
+    $infCount = (Get-ChildItem $src -Recurse -Filter "*.inf" -ErrorAction SilentlyContinue).Count
+    if ($infCount -eq 0) {
+        Write-Fail "Nenhum arquivo .inf encontrado em '$src'."
+        return
+    }
+
+    Write-Host ""
+    Write-Info "Encontrados $infCount arquivos .inf na pasta selecionada."
+    Write-Host ""
+    if (-not (Confirm-Action "Instalar todos os $infCount drivers de '$src'?")) {
+        Write-Info "Restore cancelado pelo usuario."
+        return
+    }
+    Write-Host ""
+
+    Write-Step "Instalando drivers..."
+    & pnputil /add-driver "$src\*.inf" /subdirs /install
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ""
+        Write-Ok "Restore concluido! Pode ser necessario reiniciar para ativar todos os drivers."
+    } else {
+        Write-Host ""
+        Write-Info "pnputil finalizado (codigo $LASTEXITCODE). Verifique a saida acima por erros."
+    }
+}
+
+#endregion
 
 function Show-Menu {
     Clear-Host
@@ -715,6 +828,10 @@ function Show-Menu {
     Write-Host "  [5]  Manutencao do sistema (DISM/SFC)"
     Write-Host "  [6]  Limpeza de arquivos temporarios"
     Write-Host ""
+    Write-Host "  -- Drivers --------------------------------------------------" -ForegroundColor DarkCyan
+    Write-Host "  [7]  Backup de drivers"
+    Write-Host "  [8]  Restore de drivers"
+    Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
     Write-Host ""
@@ -735,6 +852,8 @@ do {
         "4" { Register-WingetUpdateTask;   Press-Key }
         "5" { Invoke-SystemMaintenance;    Press-Key }
         "6" { Invoke-TempCleanup;          Press-Key }
+        "7" { Invoke-DriverBackup;         Press-Key }
+        "8" { Invoke-DriverRestore;        Press-Key }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
