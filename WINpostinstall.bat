@@ -370,6 +370,17 @@ function Invoke-AllTweaks {
 
     Write-Host ""
     Write-Ok "Todos os tweaks compativeis aplicados com sucesso."
+    Write-Host ""
+    Write-Host "  [!] Alguns tweaks so tem efeito completo apos reiniciar o PC." -ForegroundColor DarkYellow
+    Write-Host ""
+    $reboot = Read-Host "  Reiniciar o computador agora? (s/N)"
+    if ($reboot -match '^[sS]') {
+        Write-Step "Reiniciando em 5 segundos..."
+        Start-Sleep -Seconds 5
+        Restart-Computer -Force
+    } else {
+        Write-Info "Lembre-se de reiniciar o PC quando possivel."
+    }
 }
 
 #endregion
