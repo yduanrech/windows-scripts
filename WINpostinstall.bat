@@ -9,12 +9,13 @@ if %errorlevel% neq 0 (
     echo.
     echo   Solicitando permissao de administrador...
     echo.
-    powershell -Command "Start-Process '%~dpnx0' -Verb RunAs"
+    powershell -Command "Start-Process -FilePath '%~dpnx0' -Verb RunAs"
     exit /b
 )
 
 :: Executa o PowerShell embutido neste mesmo arquivo
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create((Get-Content -LiteralPath '%~dpnx0' -Raw -Encoding UTF8)))"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& ([scriptblock]::Create(([IO.File]::ReadAllText('%~f0'))))"
+if %errorlevel% neq 0 ( echo. & echo   [ERRO] PowerShell retornou erro. & pause )
 exit /b
 #>
 

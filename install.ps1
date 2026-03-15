@@ -13,62 +13,78 @@
 
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
-    $URLs = @(
-        'https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WINpostinstall.bat'
-    )
+    $URL = 'https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WINpostinstall.bat'
 
     Write-Host ""
     Write-Host "  Windows 11 - Pos-Instalacao" -ForegroundColor Cyan
     Write-Host ""
     Write-Progress -Activity "Baixando script..." -Status "Aguarde"
-    $response = $null
-    $errors   = @()
-    foreach ($URL in $URLs) {
-        try {
-            $response = Invoke-RestMethod -Uri $URL -ErrorAction Stop
-            break
-        }
-        catch {
-            $errors += $_
-        }
+    try {
+        $response = Invoke-RestMethod -Uri $URL -ErrorAction Stop
+    }
+    catch {
+        Write-Progress -Activity "Baixando script..." -Status "Erro" -Completed
+        Write-Host "  Erro: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  Falha ao baixar. Verifique conexao ou antivirus." -ForegroundColor Red
+        Write-Host "  Ajuda - $troubleshoot" -ForegroundColor White -BackgroundColor Blue
+        return
     }
     Write-Progress -Activity "Baixando script..." -Status "Concluido" -Completed
 
     if (-not $response) {
-        foreach ($err in $errors) {
-            Write-Host "Erro: $($err.Exception.Message)" -ForegroundColor Red
-        }
-        Write-Host "Falha ao baixar o script. Verifique sua conexao ou antivirus." -ForegroundColor Red
-        Write-Host "Ajuda - $troubleshoot" -ForegroundColor White -BackgroundColor Blue
+        Write-Host "  Resposta vazia do servidor, abortando!" -ForegroundColor Red
         return
     }
 
-    # Verifica AutoRun no registro que pode causar problemas com CMD
-    $paths = "HKCU:\SOFTWARE\Microsoft\Command Processor", "HKLM:\SOFTWARE\Microsoft\Command Processor"
-    foreach ($path in $paths) {
-        if (Get-ItemProperty -Path $path -Name "Autorun" -ErrorAction SilentlyContinue) {
-            Write-Warning "Registro Autorun encontrado, CMD pode falhar!`nExecute manualmente: Remove-ItemProperty -Path '$path' -Name 'Autorun'"
-        }
+    # --- Extrai somente a parte PowerShell (tudo apos o marcador #>) ---
+    # O bat e um polyglot: o cabecalho batch fica entre <# : ... #>
+    # Para irm|iex nao precisamos do batch - rodamos PowerShell direto.
+    $psCode = ($response -split '#>', 2)[1]
+    if (-not $psCode) {
+        Write-Host "  Falha ao extrair codigo PowerShell do script." -ForegroundColor Red
+        return
     }
 
     $rand     = [Guid]::NewGuid().Guid
     $isAdmin  = [bool]([Security.Principal.WindowsIdentity]::GetCurrent().Groups -match 'S-1-5-32-544')
-    $FilePath = if ($isAdmin) { "$env:SystemRoot\Temp\WPI_$rand.bat" } else { "$env:USERPROFILE\AppData\Local\Temp\WPI_$rand.bat" }
+    $FilePath = if ($isAdmin) {
+        "$env:SystemRoot\Temp\WPI_$rand.ps1"
+    } else {
+        "$env:USERPROFILE\AppData\Local\Temp\WPI_$rand.ps1"
+    }
 
-    # Grava UTF-8 SEM BOM — o BOM corrompe a primeira linha do polyglot para o CMD
+    # Grava como .ps1 (UTF-8 sem BOM)
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($FilePath, $response, $utf8NoBom)
+    [System.IO.File]::WriteAllText($FilePath, $psCode, $utf8NoBom)
 
     if (-not (Test-Path $FilePath)) {
-        Write-Host "Falha ao criar arquivo temporario, abortando!" -ForegroundColor Red
-        Write-Host "Ajuda - $troubleshoot" -ForegroundColor White -BackgroundColor Blue
+        Write-Host "  Falha ao criar arquivo temporario, abortando!" -ForegroundColor Red
+        Write-Host "  Ajuda - $troubleshoot" -ForegroundColor White -BackgroundColor Blue
         return
     }
 
-    $env:ComSpec = "$env:SystemRoot\system32\cmd.exe"
-
-    Write-Host "  Iniciando como Administrador..." -ForegroundColor Green
-    Start-Process -FilePath $env:ComSpec -ArgumentList "/c """"$FilePath""""" -Wait -Verb RunAs
-
-    if (Test-Path $FilePath) { Remove-Item -Path $FilePath -Force }
+    if ($isAdmin) {
+        # Ja e admin - executa direto neste console (interativo)
+        Write-Host "  Executando..." -ForegroundColor Green
+        Write-Host ""
+        try {
+            & ([scriptblock]::Create($psCode))
+        }
+        finally {
+            Remove-Item -Path $FilePath -Force -ErrorAction SilentlyContinue
+        }
+    }
+    else {
+        # Precisa elevar - abre nova janela PowerShell como admin
+        Write-Host "  Solicitando permissao de Administrador (UAC)..." -ForegroundColor Green
+        try {
+            Start-Process powershell -Verb RunAs -ArgumentList (
+                "-NoProfile -ExecutionPolicy Bypass -Command `"& { Set-Location '$env:SystemRoot'; & ([scriptblock]::Create((Get-Content -LiteralPath ''$FilePath'' -Raw))); Remove-Item -LiteralPath ''$FilePath'' -Force -ErrorAction SilentlyContinue; Write-Host ''; pause }`""
+            )
+        }
+        catch {
+            Write-Host "  Elevacao cancelada ou falhou." -ForegroundColor Red
+            Remove-Item -Path $FilePath -Force -ErrorAction SilentlyContinue
+        }
+    }
 } @args
