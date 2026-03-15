@@ -16,7 +16,7 @@
     $URL = 'https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WINpostinstall.bat'
 
     Write-Host ""
-    Write-Host "  Windows 11 - Pos-Instalacao" -ForegroundColor Cyan
+    Write-Host "  Windows 10/11 - Pos-Instalacao" -ForegroundColor Cyan
     Write-Host ""
     Write-Progress -Activity "Baixando script..." -Status "Aguarde"
     try {

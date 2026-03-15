@@ -20,7 +20,7 @@ exit /b
 #>
 
 # ==============================================================================
-#  Windows 11 - Script de Pos-Instalacao                                  v1.0
+#  Windows 10/11 - Script de Pos-Instalacao                               v1.0
 #  Repo: github.com/yduanrech/windows-scripts
 #
 #  METODO 1 - Executar via PowerShell (uma linha):
@@ -217,71 +217,80 @@ function Register-WingetUpdateTask {
 
 #region ── Tweaks do Sistema ───────────────────────────────────────────────────
 
-# Definicao de todos os tweaks com nome, descricao e funcao
+# MinBuild: 0 = Win 10+, 22000 = Win 11+
 $tweakList = @(
     @{
-        Name = "Menu de contexto classico"
-        Desc = "Restaura o menu do botao direito estilo Windows 10 (sem o 'Mostrar mais opcoes')"
-        Action = {
+        Name     = "Menu de contexto classico"
+        Desc     = "Restaura o menu do botao direito estilo Windows 10 (sem o 'Mostrar mais opcoes')"
+        MinBuild = 22000        # Somente Windows 11
+        Action   = {
             reg.exe add "HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" /f /ve | Out-Null
         }
     }
     @{
-        Name = "Mostrar extensoes de arquivo"
-        Desc = "Exibe .txt, .exe, .jpg etc. no nome dos arquivos no Explorer"
-        Action = {
+        Name     = "Mostrar extensoes de arquivo"
+        Desc     = "Exibe .txt, .exe, .jpg etc. no nome dos arquivos no Explorer"
+        MinBuild = 0
+        Action   = {
             Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "HideFileExt" 0
         }
     }
     @{
-        Name = "Mostrar arquivos ocultos"
-        Desc = "Torna visiveis arquivos e pastas ocultos no Explorer"
-        Action = {
+        Name     = "Mostrar arquivos ocultos"
+        Desc     = "Torna visiveis arquivos e pastas ocultos no Explorer"
+        MinBuild = 0
+        Action   = {
             Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Hidden" 1
         }
     }
     @{
-        Name = "Ocultar barra de idiomas"
-        Desc = "Remove o indicador de idioma (POR/ENG) da barra de tarefas"
-        Action = {
+        Name     = "Ocultar barra de idiomas"
+        Desc     = "Remove o indicador de idioma (POR/ENG) da barra de tarefas"
+        MinBuild = 0
+        Action   = {
             Set-RegistryValue "HKCU:\Software\Microsoft\CTF\LangBar" "ShowStatus" 3
         }
     }
     @{
-        Name = "Notificacoes de apps na inicializacao"
-        Desc = "Alerta quando um programa se adiciona a inicializacao do Windows"
-        Action = {
+        Name     = "Notificacoes de apps na inicializacao"
+        Desc     = "Alerta quando um programa se adiciona a inicializacao do Windows"
+        MinBuild = 0
+        Action   = {
             Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.SystemToast.StartupApp" "Enabled" 1
         }
     }
     @{
-        Name = "Windows Terminal como padrao"
-        Desc = "Define o Windows Terminal como terminal padrao do sistema"
-        Action = {
+        Name     = "Windows Terminal como padrao"
+        Desc     = "Define o Windows Terminal como terminal padrao do sistema"
+        MinBuild = 22000        # Somente Windows 11
+        Action   = {
             $path = "HKCU:\Console\%%Startup"
             Set-RegistryValue $path "DelegationConsole"  "{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}" "String"
             Set-RegistryValue $path "DelegationTerminal" "{E12CFF52-A866-4C77-9A90-F570A7AA2C6B}" "String"
         }
     }
     @{
-        Name = "Plano de energia: Alto Desempenho"
-        Desc = "Ativa o plano Alto Desempenho (mais performance, mais consumo de energia)"
-        Action = {
+        Name     = "Plano de energia: Alto Desempenho"
+        Desc     = "Ativa o plano Alto Desempenho (mais performance, mais consumo de energia)"
+        MinBuild = 0
+        Action   = {
             powercfg -duplicatescheme 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null | Out-Null
             powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
         }
     }
     @{
-        Name = "Historico da area de transferencia"
-        Desc = "Ativa o historico de copiar/colar (acesse com Win+V)"
-        Action = {
+        Name     = "Historico da area de transferencia"
+        Desc     = "Ativa o historico de copiar/colar (acesse com Win+V)"
+        MinBuild = 0
+        Action   = {
             Set-RegistryValue "HKCU:\Software\Microsoft\Clipboard" "EnableClipboardHistory" 1
         }
     }
     @{
-        Name = "Desabilitar hibernacao e inicializacao rapida"
-        Desc = "Remove o arquivo de hibernacao (hiberfil.sys) e desliga o Fast Startup"
-        Action = {
+        Name     = "Desabilitar hibernacao e inicializacao rapida"
+        Desc     = "Remove o arquivo de hibernacao (hiberfil.sys) e desliga o Fast Startup"
+        MinBuild = 0
+        Action   = {
             powercfg /h off 2>$null
             Set-RegistryValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" "HiberbootEnabled" 0
         }
@@ -289,30 +298,44 @@ $tweakList = @(
 )
 
 function Invoke-AllTweaks {
-    Write-Host "`n  === Tweaks do Sistema ===`n" -ForegroundColor Cyan
+    $build = [System.Environment]::OSVersion.Version.Build
+    $winVer = if ($build -ge 22000) { "Windows 11" } else { "Windows 10" }
+
+    # Filtra tweaks compativeis com a versao atual
+    $compatible = $tweakList | Where-Object { $build -ge $_.MinBuild }
+    $skipped    = $tweakList | Where-Object { $build -lt $_.MinBuild }
+
+    Write-Host "`n  === Tweaks do Sistema ($winVer - Build $build) ===`n" -ForegroundColor Cyan
     Write-Host "  O que sera feito:" -ForegroundColor DarkGray
     Write-Host ""
     $i = 1
-    foreach ($t in $tweakList) {
+    foreach ($t in $compatible) {
         Write-Host ("  {0,2}. " -f $i) -NoNewline -ForegroundColor DarkGray
         Write-Host "$($t.Name)" -NoNewline -ForegroundColor White
         Write-Host " - $($t.Desc)" -ForegroundColor DarkGray
         $i++
     }
+    if ($skipped) {
+        Write-Host ""
+        Write-Host "  Ignorados (requer Windows 11):" -ForegroundColor DarkYellow
+        foreach ($t in $skipped) {
+            Write-Host "   x $($t.Name)" -ForegroundColor DarkGray
+        }
+    }
     Write-Host ""
     Write-Host "  + Reinicia o Explorer para aplicar as alteracoes visuais" -ForegroundColor DarkGray
     Write-Host ""
 
-    if (-not (Confirm-Action "Aplicar todos os $($tweakList.Count) tweaks?")) {
+    if (-not (Confirm-Action "Aplicar os $($compatible.Count) tweaks compativeis?")) {
         Write-Info "Tweaks cancelados pelo usuario."
         return
     }
     Write-Host ""
 
     $current = 0
-    foreach ($t in $tweakList) {
+    foreach ($t in $compatible) {
         $current++
-        Write-Step "[$current/$($tweakList.Count)] $($t.Name)"
+        Write-Step "[$current/$($compatible.Count)] $($t.Name)"
         & $t.Action
     }
 
@@ -322,7 +345,7 @@ function Invoke-AllTweaks {
     Start-Process explorer.exe
 
     Write-Host ""
-    Write-Ok "Todos os tweaks aplicados com sucesso."
+    Write-Ok "Todos os tweaks compativeis aplicados com sucesso."
 }
 
 #endregion
@@ -334,7 +357,7 @@ function Show-Menu {
     $build = [System.Environment]::OSVersion.Version.Build
     Write-Host ""
     Write-Host "  ================================================================" -ForegroundColor Cyan
-    Write-Host "       Windows 11 - Pos-Instalacao  v1.0   (Build $build)         " -ForegroundColor Cyan
+    Write-Host "       Windows 10/11 - Pos-Instalacao  v1.0                       " -ForegroundColor Cyan
     Write-Host "  ================================================================" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  -- Programas ------------------------------------------------" -ForegroundColor DarkCyan
@@ -344,10 +367,6 @@ function Show-Menu {
     Write-Host "  -- Sistema --------------------------------------------------" -ForegroundColor DarkCyan
     Write-Host "  [3]  Aplicar tweaks do sistema         (9 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
-    Write-Host ""
-    Write-Host "  -- Completo -------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [5]  Tudo - Normal  + Tweaks + Tarefa"
-    Write-Host "  [6]  Tudo - Devs    + Tweaks + Tarefa"
     Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
@@ -367,18 +386,6 @@ do {
         "2" { Install-DevApps;             Press-Key }
         "3" { Invoke-AllTweaks;            Press-Key }
         "4" { Register-WingetUpdateTask;   Press-Key }
-        "5" {
-            Install-NormalApps
-            Invoke-AllTweaks
-            Register-WingetUpdateTask
-            Press-Key
-        }
-        "6" {
-            Install-DevApps
-            Invoke-AllTweaks
-            Register-WingetUpdateTask
-            Press-Key
-        }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
