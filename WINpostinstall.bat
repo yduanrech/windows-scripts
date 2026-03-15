@@ -303,6 +303,14 @@ $tweakList = @(
             Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "BingSearchEnabled" 0
         }
     }
+    @{
+        Name     = "Mostrar porcentagem de bateria na barra de tarefas"
+        Desc     = "Exibe o % da bateria ao lado do icone - requer Win11 24H2 (build 26100+)"
+        MinBuild = 26100        # Windows 11 24H2 ou superior
+        Action   = {
+            Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "IsBatteryPercentageEnabled" 1
+        }
+    }
 )
 
 function Invoke-AllTweaks {
@@ -869,7 +877,7 @@ function Show-Menu {
     Write-Host "  [2]  Instalar programas - Devs         (Normal + 9 extras)"
     Write-Host ""
     Write-Host "  -- Sistema --------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [3]  Aplicar tweaks do sistema         (10 ajustes)"
+    Write-Host "  [3]  Aplicar tweaks do sistema         (11 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
     Write-Host ""
     Write-Host "  -- Manutencao -----------------------------------------------" -ForegroundColor DarkCyan
