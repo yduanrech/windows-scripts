@@ -810,36 +810,47 @@ function Invoke-DriverRestore {
 
 #region ── Rede ──────────────────────────────────────────────────────────
 
-function Invoke-WifiDiagnostic {
-    Write-Host "`n  === Diagnostico Wi-Fi ===" -ForegroundColor Cyan
+function Invoke-WifiStatus {
+    Write-Host "`n  === Status das Interfaces Wi-Fi ===" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "  O que sera feito:" -ForegroundColor DarkGray
     Write-Host "  - Exibe o status atual de todas as interfaces Wi-Fi do sistema" -ForegroundColor DarkGray
-    Write-Host "  - Opcionalmente gera um relatorio HTML completo de conectividade" -ForegroundColor DarkGray
+    Write-Host "  - Mostra rede conectada, BSSID, sinal, canal, velocidade etc." -ForegroundColor DarkGray
     Write-Host ""
 
     Write-Step "Interfaces Wi-Fi detectadas:"
     Write-Host ""
     & netsh wlan show interfaces
+}
+
+function Invoke-WifiReport {
+    Write-Host "`n  === Relatorio de Diagnostico Wi-Fi ===" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  O que sera feito:" -ForegroundColor DarkGray
+    Write-Host "  - Gera um relatorio HTML completo de conectividade WLAN" -ForegroundColor DarkGray
+    Write-Host "  - Inclui historico de conexoes, erros e eventos de rede" -ForegroundColor DarkGray
+    Write-Host "  - Salvo em: %ProgramData%\Microsoft\Windows\WlanReport\" -ForegroundColor DarkGray
     Write-Host ""
 
-    $genReport = Read-Host "  Gerar relatorio HTML de diagnostico Wi-Fi? (S/n)"
-    if ($genReport -eq '' -or $genReport -match '^[sS]') {
+    if (-not (Confirm-Action "Gerar relatorio HTML de diagnostico Wi-Fi?")) {
+        Write-Info "Operacao cancelada pelo usuario."
+        return
+    }
+    Write-Host ""
+
+    Write-Step "Gerando relatorio WLAN..."
+    & netsh wlan show wlanreport | Out-Null
+    $reportPath = "$env:ProgramData\Microsoft\Windows\WlanReport\wlan-report-latest.html"
+    if (Test-Path $reportPath) {
+        Write-Ok "Relatorio gerado em:"
+        Write-Host "  $reportPath" -ForegroundColor DarkGray
         Write-Host ""
-        Write-Step "Gerando relatorio WLAN..."
-        & netsh wlan show wlanreport | Out-Null
-        $reportPath = "$env:ProgramData\Microsoft\Windows\WlanReport\wlan-report-latest.html"
-        if (Test-Path $reportPath) {
-            Write-Ok "Relatorio gerado em:"
-            Write-Host "  $reportPath" -ForegroundColor DarkGray
-            Write-Host ""
-            $open = Read-Host "  Abrir relatorio no navegador? (S/n)"
-            if ($open -eq '' -or $open -match '^[sS]') {
-                Start-Process $reportPath
-            }
-        } else {
-            Write-Fail "Relatorio nao encontrado. Verifique se o Wi-Fi esta ativo."
+        $open = Read-Host "  Abrir relatorio no navegador? (S/n)"
+        if ($open -eq '' -or $open -match '^[sS]') {
+            Start-Process $reportPath
         }
+    } else {
+        Write-Fail "Relatorio nao encontrado. Verifique se o Wi-Fi esta ativo."
     }
 }
 
@@ -870,7 +881,8 @@ function Show-Menu {
     Write-Host "  [8]  Restore de drivers"
     Write-Host ""
     Write-Host "  -- Rede -----------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [9]  Diagnostico Wi-Fi"
+    Write-Host "  [9]  Status atual das interfaces Wi-Fi"
+    Write-Host "  [10] Gerar relatorio HTML de diagnostico Wi-Fi"
     Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
@@ -894,7 +906,8 @@ do {
         "6" { Invoke-TempCleanup;          Press-Key }
         "7" { Invoke-DriverBackup;         Press-Key }
         "8" { Invoke-DriverRestore;         Press-Key }
-        "9" { Invoke-WifiDiagnostic;        Press-Key }
+        "9"  { Invoke-WifiStatus;           Press-Key }
+        "10" { Invoke-WifiReport;            Press-Key }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
