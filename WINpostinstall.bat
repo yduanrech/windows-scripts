@@ -94,26 +94,26 @@ if (-not (Test-Winget)) {
 #region ── Listas de Aplicativos (Id + Descricao) ─────────────────────────────
 
 $appsNormal = @(
-    @{ Id = "Google.Chrome";                Desc = "Navegador web" }
-    @{ Id = "7zip.7zip";                    Desc = "Compactador/descompactador de arquivos" }
-    @{ Id = "Bitwarden.Bitwarden";          Desc = "Gerenciador de senhas" }
-    @{ Id = "ente-io.auth-desktop";         Desc = "Autenticador 2FA (Ente Auth)" }
-    @{ Id = "Microsoft.PowerToys";          Desc = "Utilitarios avancados da Microsoft" }
-    @{ Id = "Adobe.Acrobat.Reader.64-bit";  Desc = "Leitor de PDF" }
-    @{ Id = "clsid2.mpc-hc";               Desc = "Player de video leve" }
-    @{ Id = "AntibodySoftware.WizTree";     Desc = "Analisador de espaco em disco" }
+    @{ Id = "Google.Chrome";                Desc = "Google Chrome" }
+    @{ Id = "7zip.7zip";                    Desc = "7-Zip" }
+    @{ Id = "Bitwarden.Bitwarden";          Desc = "Bitwarden" }
+    @{ Id = "ente-io.auth-desktop";         Desc = "Ente Auth" }
+    @{ Id = "Microsoft.PowerToys";          Desc = "Microsoft PowerToys" }
+    @{ Id = "Adobe.Acrobat.Reader.64-bit";  Desc = "Adobe Acrobat Reader" }
+    @{ Id = "clsid2.mpc-hc";               Desc = "MPC-HC" }
+    @{ Id = "AntibodySoftware.WizTree";     Desc = "WizTree" }
 )
 
 $appsDev = @(
-    @{ Id = "Microsoft.VisualStudioCode";   Desc = "Editor de codigo (VS Code)" }
-    @{ Id = "Notepad++.Notepad++";          Desc = "Editor de texto avancado" }
-    @{ Id = "CoreyButler.NVMforWindows";    Desc = "Gerenciador de versoes do Node.js" }
-    @{ Id = "HeidiSQL.HeidiSQL";            Desc = "Cliente de banco de dados (MySQL/MariaDB)" }
-    @{ Id = "Microsoft.Git";                Desc = "Controle de versao Git" }
-    @{ Id = "GitHub.GitHubDesktop";         Desc = "Cliente Git com interface grafica" }
-    @{ Id = "PuTTY.PuTTY";                 Desc = "Cliente SSH/Telnet" }
-    @{ Id = "WinSCP.WinSCP";               Desc = "Cliente SFTP/FTP/SCP" }
-    @{ Id = "OpenVPNTechnologies.OpenVPN";  Desc = "Cliente VPN" }
+    @{ Id = "Microsoft.VisualStudioCode";   Desc = "Visual Studio Code" }
+    @{ Id = "Notepad++.Notepad++";          Desc = "Notepad++" }
+    @{ Id = "CoreyButler.NVMforWindows";    Desc = "NVM for Windows" }
+    @{ Id = "HeidiSQL.HeidiSQL";            Desc = "HeidiSQL" }
+    @{ Id = "Microsoft.Git";                Desc = "Git" }
+    @{ Id = "GitHub.GitHubDesktop";         Desc = "GitHub Desktop" }
+    @{ Id = "PuTTY.PuTTY";                 Desc = "PuTTY" }
+    @{ Id = "WinSCP.WinSCP";               Desc = "WinSCP" }
+    @{ Id = "OpenVPNTechnologies.OpenVPN";  Desc = "OpenVPN" }
 )
 
 #endregion
@@ -345,10 +345,6 @@ function Show-Menu {
     Write-Host "  [3]  Aplicar tweaks do sistema         (9 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
     Write-Host ""
-    Write-Host "  -- Completo -------------------------------------------------" -ForegroundColor DarkCyan
-    Write-Host "  [5]  Tudo - Normal  + Tweaks + Tarefa"
-    Write-Host "  [6]  Tudo - Devs    + Tweaks + Tarefa"
-    Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
     Write-Host ""
@@ -367,18 +363,6 @@ do {
         "2" { Install-DevApps;             Press-Key }
         "3" { Invoke-AllTweaks;            Press-Key }
         "4" { Register-WingetUpdateTask;   Press-Key }
-        "5" {
-            Install-NormalApps
-            Invoke-AllTweaks
-            Register-WingetUpdateTask
-            Press-Key
-        }
-        "6" {
-            Install-DevApps
-            Invoke-AllTweaks
-            Register-WingetUpdateTask
-            Press-Key
-        }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
