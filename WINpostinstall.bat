@@ -345,6 +345,10 @@ function Show-Menu {
     Write-Host "  [3]  Aplicar tweaks do sistema         (9 ajustes)"
     Write-Host "  [4]  Criar tarefa de atualizacao semanal (winget)"
     Write-Host ""
+    Write-Host "  -- Completo -------------------------------------------------" -ForegroundColor DarkCyan
+    Write-Host "  [5]  Tudo - Normal  + Tweaks + Tarefa"
+    Write-Host "  [6]  Tudo - Devs    + Tweaks + Tarefa"
+    Write-Host ""
     Write-Host "  ---------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host "  [0]  Sair"
     Write-Host ""
@@ -363,6 +367,18 @@ do {
         "2" { Install-DevApps;             Press-Key }
         "3" { Invoke-AllTweaks;            Press-Key }
         "4" { Register-WingetUpdateTask;   Press-Key }
+        "5" {
+            Install-NormalApps
+            Invoke-AllTweaks
+            Register-WingetUpdateTask
+            Press-Key
+        }
+        "6" {
+            Install-DevApps
+            Invoke-AllTweaks
+            Register-WingetUpdateTask
+            Press-Key
+        }
         "0" { }
         default {
             Write-Fail "Opcao invalida!"
