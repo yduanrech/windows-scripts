@@ -298,7 +298,7 @@ $tweakList = @(
     @{
         Name     = "Desabilitar pesquisa Bing no menu Iniciar"
         Desc     = "Remove a pesquisa web (Bing) do menu Iniciar - busca fica so local"
-        MinBuild = 22000        # Somente Windows 11
+        MinBuild = 0            # Windows 10 1803+ e Windows 11
         Action   = {
             Set-RegistryValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "BingSearchEnabled" 0
         }
