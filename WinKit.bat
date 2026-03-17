@@ -27,8 +27,8 @@ exit /b
 #    irm https://raw.githubusercontent.com/yduanrech/windows-scripts/main/install.ps1 | iex
 #
 #  METODO 2 - Download direto:
-#    Baixe o WINpostinstall.bat e execute como Administrador.
-#    https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WINpostinstall.bat
+#    Baixe o WinKit.bat e execute como Administrador.
+#    https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WinKit.bat
 #
 #  Tecnica: arquivo .bat polyglot (batch + PowerShell no mesmo arquivo).
 #  O cabecalho batch cuida da elevacao UAC e chama o PowerShell com
