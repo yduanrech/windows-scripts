@@ -13,7 +13,7 @@
 
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
-    $URL = 'https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WINpostinstall.bat'
+    $URL = 'https://raw.githubusercontent.com/yduanrech/windows-scripts/main/WinKit.bat'
 
     Write-Host ""
     Write-Host "  Windows 10/11 - Pos-Instalacao" -ForegroundColor Cyan
